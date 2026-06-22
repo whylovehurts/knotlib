@@ -1,14 +1,7 @@
 --[[
-    ██╗  ██╗███╗   ██╗ ██████╗ ████████╗██╗     ██╗██████╗ 
-    ██║ ██╔╝████╗  ██║██╔═══██╗╚══██╔══╝██║     ██║██╔══██╗
-    █████╔╝ ██╔██╗ ██║██║   ██║   ██║   ██║     ██║██████╔╝
-    ██╔═██╗ ██║╚██╗██║██║   ██║   ██║   ██║     ██║██╔══██╗
-    ██║  ██╗██║ ╚████║╚██████╔╝   ██║   ███████╗██║██████╔╝
-    ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝    ╚═╝   ╚══════╝╚═╝╚═════╝ 
-    
     KnotLib v1.0.0 - UI Library for Roblox (LuaU)
     Based on KnotHub UI Design
-    
+
     Usage:
         local Library = loadstring(...)()
         local Window = Library:CreateWindow({ Title = "Hub", Version = "v1" })
@@ -30,7 +23,6 @@ local LocalPlayer = Players.LocalPlayer
 -- THEME
 -- ============================================
 local Theme = {
-    -- Cores da UI convertida
     Background       = Color3.fromRGB(37, 31, 37),
     ToggleBarBg      = Color3.fromRGB(63, 54, 62),
     MainFrameBg      = Color3.fromRGB(48, 40, 48),
@@ -53,13 +45,11 @@ local Theme = {
     InputBg          = Color3.fromRGB(32, 27, 32),
     SectionLine      = Color3.fromRGB(60, 52, 60),
 
-    -- Fontes da UI convertida
     TitleFont           = Font.new("rbxasset://fonts/families/Guru.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
     VersionFont         = Font.new("rbxasset://fonts/families/Guru.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
     ComponentFont       = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
     ComponentFontRegular = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
 
-    -- Layout
     CornerRadius      = UDim.new(0, 7),
     CornerRadiusSmall = UDim.new(0, 5),
     CornerRadiusTiny  = UDim.new(0, 4),
@@ -133,10 +123,15 @@ end
 
 local function GetParentGui()
     local success, result = pcall(function()
-        if gethui then return gethui() end
-        return game:GetService("CoreGui")
+        if typeof(gethui) == "function" then return gethui() end
     end)
     if success and result then return result end
+
+    local success2, result2 = pcall(function()
+        return game:GetService("CoreGui")
+    end)
+    if success2 and result2 then return result2 end
+
     return LocalPlayer:WaitForChild("PlayerGui")
 end
 
@@ -147,7 +142,7 @@ local Library = {}
 Library.__index = Library
 Library.Version = "1.0.0"
 Library.Options = {}
-Library.Flags = Library.Options -- alias
+Library.Flags = Library.Options
 Library.Unloaded = false
 Library._windows = {}
 Library._connections = {}
@@ -172,11 +167,20 @@ function Library:_addConnection(conn)
 end
 
 -- ============================================
--- WINDOW CLASS
+-- FORWARD DECLARATIONS
 -- ============================================
 local Window = {}
 Window.__index = Window
 
+local Tab = {}
+Tab.__index = Tab
+
+local Section = {}
+Section.__index = Section
+
+-- ============================================
+-- WINDOW
+-- ============================================
 function Library:CreateWindow(opts)
     opts = opts or {}
     local title = opts.Title or "KnotHub"
@@ -191,6 +195,7 @@ function Library:CreateWindow(opts)
     win._minimized = false
     win._visible = true
     win._minimizeKey = minimizeKey
+    win._originalSize = size
 
     -- ScreenGui
     local screenGui = Create("ScreenGui", {
@@ -207,7 +212,7 @@ function Library:CreateWindow(opts)
         BackgroundColor3 = Theme.Background,
         BorderSizePixel = 0,
         Size = size,
-        Position = UDim2.new(0.5, -size.X.Offset / 2, 0.5, -size.Y.Offset / 2),
+        Position = UDim2.new(0.5, -(size.X.Offset / 2), 0.5, -(size.Y.Offset / 2)),
         Parent = screenGui,
     })
     AddCorner(main, Theme.CornerRadius)
@@ -226,7 +231,7 @@ function Library:CreateWindow(opts)
     AddCorner(toggleBar, Theme.CornerRadius)
     win._toggleBar = toggleBar
 
-    -- Bottom cover for ToggleBar rounded corners (so bottom is flat)
+    -- Bottom cover for ToggleBar (flat bottom edge)
     Create("Frame", {
         Name = "ToggleBarCover",
         BackgroundColor3 = Theme.ToggleBarBg,
@@ -251,13 +256,13 @@ function Library:CreateWindow(opts)
     })
     win._titleLabel = titleLabel
 
-    -- Separator line
+    -- Separator line between title and version
     local separator = Create("Frame", {
         Name = "Separator",
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
         Size = UDim2.new(0, 2, 0, 16),
-        Position = UDim2.new(0, 0, 0.5, -8),
+        Position = UDim2.new(0, 220, 0.5, -8),
         Parent = toggleBar,
     })
     AddCorner(separator, UDim.new(0, 1))
@@ -273,30 +278,34 @@ function Library:CreateWindow(opts)
         Text = version,
         TextXAlignment = Enum.TextXAlignment.Left,
         Size = UDim2.new(0, 200, 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0, 230, 0, 0),
         Parent = toggleBar,
     })
     win._versionLabel = versionLabel
 
-    -- Position separator and version based on title width
+    -- Reposition separator + version based on title width
     local function updateTitleLayout()
-        local textWidth = titleLabel.TextBounds.X
-        separator.Position = UDim2.new(0, 12 + textWidth + 10, 0.5, -8)
-        versionLabel.Position = UDim2.new(0, 12 + textWidth + 20, 0, 0)
+        local bounds = titleLabel.TextBounds
+        if bounds then
+            local textWidth = bounds.X
+            separator.Position = UDim2.new(0, 12 + textWidth + 10, 0.5, -8)
+            versionLabel.Position = UDim2.new(0, 12 + textWidth + 20, 0, 0)
+        end
     end
     titleLabel:GetPropertyChangedSignal("TextBounds"):Connect(updateTitleLayout)
     task.defer(updateTitleLayout)
 
-    -- Minimize button
+    -- Minimize button (top right)
     local minimizeBtn = Create("TextButton", {
         Name = "MinimizeBtn",
         BackgroundTransparency = 1,
         FontFace = Theme.ComponentFont,
         TextColor3 = Theme.TextSecondary,
         TextSize = 18,
-        Text = "−",
+        Text = "-",
         Size = UDim2.new(0, 30, 0, 30),
         Position = UDim2.new(1, -32, 0, 0),
+        AutoButtonColor = false,
         Parent = toggleBar,
     })
     minimizeBtn.MouseButton1Click:Connect(function()
@@ -309,7 +318,7 @@ function Library:CreateWindow(opts)
         Tween(minimizeBtn, { TextColor3 = Theme.TextSecondary }, 0.15)
     end)
 
-    -- MainFrame (content area below ToggleBar)
+    -- MainFrame (content below ToggleBar)
     local mainFrame = Create("Frame", {
         Name = "MainFrame",
         BackgroundColor3 = Theme.MainFrameBg,
@@ -335,7 +344,7 @@ function Library:CreateWindow(opts)
     AddCorner(tabsSidebar)
     win._tabsSidebar = tabsSidebar
 
-    -- Tabs list inside sidebar
+    -- Scrollable tab list inside sidebar
     local tabsScrollFrame = Create("ScrollingFrame", {
         Name = "TabsList",
         BackgroundTransparency = 1,
@@ -346,11 +355,16 @@ function Library:CreateWindow(opts)
         ScrollBarImageColor3 = Theme.TextTertiary,
         ScrollBarImageTransparency = 0.5,
         CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
         Parent = tabsSidebar,
     })
     local tabsLayout = AddListLayout(tabsScrollFrame, 4)
     tabsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+    -- Auto-size canvas
+    tabsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        tabsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, tabsLayout.AbsoluteContentSize.Y + 8)
+    end)
+
     win._tabsScrollFrame = tabsScrollFrame
 
     -- CurrentTab content area
@@ -366,9 +380,10 @@ function Library:CreateWindow(opts)
     AddCorner(currentTabFrame)
     win._currentTabFrame = currentTabFrame
 
-    -- Drag system
+    -- ===== DRAG SYSTEM =====
     local dragging = false
-    local dragStart, startPos
+    local dragStart = nil
+    local startPos = nil
 
     self:_addConnection(toggleBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -387,7 +402,10 @@ function Library:CreateWindow(opts)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             Tween(main, {
-                Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+                Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
             }, 0.08)
         end
     end))
@@ -418,7 +436,9 @@ function Library:CreateWindow(opts)
     return win
 end
 
--- Window methods
+-- ============================================
+-- WINDOW METHODS
+-- ============================================
 function Window:SetTitle(title)
     self._titleLabel.Text = title
 end
@@ -428,37 +448,28 @@ function Window:SetVersion(version)
 end
 
 function Window:Destroy()
-    self._screenGui:Destroy()
+    if self._screenGui then
+        self._screenGui:Destroy()
+    end
 end
 
 function Window:Hide()
     self._visible = false
-    Tween(self._main, { Size = UDim2.new(0, self._main.Size.X.Offset, 0, 0) }, 0.3)
-    task.delay(0.3, function()
-        if not self._visible then
-            self._main.Visible = false
-        end
-    end)
+    self._main.Visible = false
 end
 
 function Window:Show()
     self._visible = true
     self._main.Visible = true
-    local targetSize = self._screenGui and self._main:GetAttribute("OriginalSize") or UDim2.fromOffset(661, 346)
-    Tween(self._main, { Size = targetSize }, 0.3)
 end
 
 function Window:Minimize()
     if self._minimized then
-        -- Restore
         self._minimized = false
         self._mainFrame.Visible = true
-        local targetSize = self._main:GetAttribute("OriginalSize") or UDim2.fromOffset(661, 346)
-        Tween(self._main, { Size = targetSize }, 0.3)
+        Tween(self._main, { Size = self._originalSize }, 0.3)
     else
-        -- Minimize
         self._minimized = true
-        self._main:SetAttribute("OriginalSize", self._main.Size)
         Tween(self._main, { Size = UDim2.new(0, self._main.Size.X.Offset, 0, 31) }, 0.3)
         task.delay(0.3, function()
             if self._minimized then
@@ -478,21 +489,18 @@ function Window:SelectTab(indexOrTab)
 end
 
 -- ============================================
--- TAB CLASS
+-- TAB
 -- ============================================
-local Tab = {}
-Tab.__index = Tab
-
 function Window:AddTab(opts)
     opts = opts or {}
     local title = opts.Title or "Tab"
-    local icon = opts.Icon
 
     local tab = setmetatable({}, Tab)
     tab._window = self
     tab._library = self._library
     tab._title = title
     tab._sections = {}
+    tab._defaultSection = nil
     tab._order = #self._tabs + 1
 
     -- Tab button in sidebar
@@ -513,7 +521,7 @@ function Window:AddTab(opts)
     AddCorner(tabButton, Theme.CornerRadiusSmall)
     tab._tabButton = tabButton
 
-    -- Tab page (ScrollingFrame) inside CurrentTab area
+    -- Tab page (ScrollingFrame) in content area
     local tabPage = Create("ScrollingFrame", {
         Name = "Page_" .. title,
         BackgroundTransparency = 1,
@@ -524,20 +532,28 @@ function Window:AddTab(opts)
         ScrollBarImageColor3 = Theme.TextTertiary,
         ScrollBarImageTransparency = 0.5,
         CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
         Visible = false,
         Parent = self._currentTabFrame,
     })
+
     local pageLayout = AddListLayout(tabPage, 8)
     pageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     AddPadding(tabPage, 8, 8, 8, 8)
+
+    -- Auto canvas size
+    pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        tabPage.CanvasSize = UDim2.new(0, 0, 0, pageLayout.AbsoluteContentSize.Y + 16)
+    end)
+
     tab._tabPage = tabPage
     tab._pageLayout = pageLayout
 
-    -- Tab button interactions
+    -- Tab button click
     tabButton.MouseButton1Click:Connect(function()
         tab:_select()
     end)
+
+    -- Hover effects
     tabButton.MouseEnter:Connect(function()
         if self._selectedTab ~= tab then
             Tween(tabButton, { BackgroundTransparency = 0.3 }, 0.15)
@@ -551,7 +567,7 @@ function Window:AddTab(opts)
 
     table.insert(self._tabs, tab)
 
-    -- Auto-select first tab
+    -- Auto select first tab
     if #self._tabs == 1 then
         tab:_select()
     end
@@ -559,6 +575,9 @@ function Window:AddTab(opts)
     return tab
 end
 
+-- ============================================
+-- TAB METHODS
+-- ============================================
 function Tab:_select()
     local win = self._window
 
@@ -573,13 +592,6 @@ function Tab:_select()
     win._selectedTab = self
     self._tabPage.Visible = true
     Tween(self._tabButton, { BackgroundTransparency = 0.15, TextColor3 = Theme.TextPrimary }, 0.2)
-
-    -- Fade in animation
-    self._tabPage.GroupTransparency = 1
-    -- Use CanvasGroup if available, otherwise just show
-    local success = pcall(function()
-        -- Simple visibility toggle with opacity tween on children
-    end)
 end
 
 function Tab:Show()
@@ -591,11 +603,8 @@ function Tab:Hide()
 end
 
 -- ============================================
--- SECTION CLASS
+-- SECTION
 -- ============================================
-local Section = {}
-Section.__index = Section
-
 function Tab:AddSection(opts)
     if type(opts) == "string" then
         opts = { Title = opts }
@@ -621,53 +630,52 @@ function Tab:AddSection(opts)
     })
     section._frame = sectionFrame
 
-    -- Section title
-    local titleFrame = Create("Frame", {
-        Name = "SectionTitle",
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 24),
-        LayoutOrder = 0,
-        Parent = sectionFrame,
-    })
+    -- Section title (only show if title is not empty)
+    if title ~= "" then
+        local titleFrame = Create("Frame", {
+            Name = "SectionTitle",
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 24),
+            LayoutOrder = 0,
+            Parent = sectionFrame,
+        })
 
-    Create("TextLabel", {
-        Name = "Title",
-        BackgroundTransparency = 1,
-        FontFace = Theme.ComponentFont,
-        TextColor3 = Theme.TextTertiary,
-        TextSize = 14,
-        Text = string.upper(title),
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Size = UDim2.new(1, 0, 1, 0),
-        Position = UDim2.new(0, 4, 0, 0),
-        Parent = titleFrame,
-    })
+        Create("TextLabel", {
+            Name = "Title",
+            BackgroundTransparency = 1,
+            FontFace = Theme.ComponentFont,
+            TextColor3 = Theme.TextTertiary,
+            TextSize = 14,
+            Text = string.upper(title),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Size = UDim2.new(1, 0, 1, 0),
+            Position = UDim2.new(0, 4, 0, 0),
+            Parent = titleFrame,
+        })
 
-    -- Section line
-    Create("Frame", {
-        Name = "Line",
-        BackgroundColor3 = Theme.SectionLine,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, -8, 0, 1),
-        Position = UDim2.new(0, 4, 1, -1),
-        BackgroundTransparency = 0.5,
-        Parent = titleFrame,
-    })
+        Create("Frame", {
+            Name = "Line",
+            BackgroundColor3 = Theme.SectionLine,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, -8, 0, 1),
+            Position = UDim2.new(0, 4, 1, -1),
+            BackgroundTransparency = 0.5,
+            Parent = titleFrame,
+        })
+    end
 
     -- Content layout
     local contentLayout = AddListLayout(sectionFrame, 5)
     contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
     section._contentLayout = contentLayout
 
+    table.insert(self._sections, section)
     return section
 end
 
 -- ============================================
--- COMPONENTS
+-- COMPONENT HELPER
 -- ============================================
-
--- Helper: create component container
 local function CreateComponentFrame(parent, height, order)
     local frame = Create("Frame", {
         Name = "Component",
@@ -682,9 +690,9 @@ local function CreateComponentFrame(parent, height, order)
     return frame
 end
 
--- ─────────────────────────────────────
+-- ============================================
 -- ADD LABEL
--- ─────────────────────────────────────
+-- ============================================
 function Section:AddLabel(opts)
     if type(opts) == "string" then opts = { Title = opts } end
     opts = opts or {}
@@ -714,13 +722,13 @@ function Section:AddLabel(opts)
         self.Value = text
     end
 
-    if flag then self._library:_registerOption(flag, comp) end
+    if flag then Library:_registerOption(flag, comp) end
     return comp
 end
 
--- ─────────────────────────────────────
+-- ============================================
 -- ADD PARAGRAPH
--- ─────────────────────────────────────
+-- ============================================
 function Section:AddParagraph(opts)
     opts = opts or {}
     local title = opts.Title or "Paragraph"
@@ -777,17 +785,17 @@ function Section:AddParagraph(opts)
         self._contentLabel.Text = text
     end
 
-    if flag then self._library:_registerOption(flag, comp) end
+    if flag then Library:_registerOption(flag, comp) end
     return comp
 end
 
--- ─────────────────────────────────────
+-- ============================================
 -- ADD BUTTON
--- ─────────────────────────────────────
+-- ============================================
 function Section:AddButton(opts)
     opts = opts or {}
     local title = opts.Title or "Button"
-    local description = opts.Description or nil
+    local description = opts.Description
     local callback = opts.Callback or function() end
     local flag = opts.Flag
 
@@ -832,7 +840,6 @@ function Section:AddButton(opts)
         })
     end
 
-    -- Hover effects
     btn.MouseEnter:Connect(function()
         Tween(frame, { BackgroundTransparency = 0.3 }, 0.15)
     end)
@@ -840,7 +847,6 @@ function Section:AddButton(opts)
         Tween(frame, { BackgroundTransparency = 0.5 }, 0.15)
     end)
     btn.MouseButton1Click:Connect(function()
-        -- Press animation
         Tween(frame, { BackgroundTransparency = 0.1 }, 0.08)
         task.delay(0.08, function()
             Tween(frame, { BackgroundTransparency = 0.5 }, 0.15)
@@ -849,17 +855,17 @@ function Section:AddButton(opts)
     end)
 
     local comp = { _frame = frame, _btn = btn, Type = "Button" }
-    if flag then self._library:_registerOption(flag, comp) end
+    if flag then Library:_registerOption(flag, comp) end
     return comp
 end
 
--- ─────────────────────────────────────
+-- ============================================
 -- ADD TOGGLE
--- ─────────────────────────────────────
+-- ============================================
 function Section:AddToggle(opts)
     opts = opts or {}
     local title = opts.Title or "Toggle"
-    local description = opts.Description or nil
+    local description = opts.Description
     local default = opts.Default or false
     local callback = opts.Callback or function() end
     local flag = opts.Flag
@@ -926,12 +932,21 @@ function Section:AddToggle(opts)
     })
     AddCorner(toggleCircle, UDim.new(0, 7))
 
-    local comp = { _frame = frame, _toggleBg = toggleBg, _toggleCircle = toggleCircle, Value = default, Type = "Toggle", _changedCallbacks = {} }
+    local comp = {
+        _frame = frame,
+        _toggleBg = toggleBg,
+        _toggleCircle = toggleCircle,
+        Value = default,
+        Type = "Toggle",
+        _changedCallbacks = {},
+    }
 
     function comp:SetValue(val)
         self.Value = val
         Tween(self._toggleBg, { BackgroundColor3 = val and Theme.ToggleOn or Theme.ToggleOff }, 0.2)
-        Tween(self._toggleCircle, { Position = val and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7) }, 0.2)
+        Tween(self._toggleCircle, {
+            Position = val and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+        }, 0.2)
         pcall(callback, val)
         for _, cb in ipairs(self._changedCallbacks) do
             pcall(cb, val)
@@ -946,12 +961,10 @@ function Section:AddToggle(opts)
         table.insert(self._changedCallbacks, fn)
     end
 
-    -- Click handler
     btn.MouseButton1Click:Connect(function()
         comp:SetValue(not comp.Value)
     end)
 
-    -- Hover
     btn.MouseEnter:Connect(function()
         Tween(frame, { BackgroundTransparency = 0.35 }, 0.15)
     end)
@@ -959,17 +972,17 @@ function Section:AddToggle(opts)
         Tween(frame, { BackgroundTransparency = 0.5 }, 0.15)
     end)
 
-    if flag then self._library:_registerOption(flag, comp) end
+    if flag then Library:_registerOption(flag, comp) end
     return comp
 end
 
--- ─────────────────────────────────────
+-- ============================================
 -- ADD SLIDER
--- ─────────────────────────────────────
+-- ============================================
 function Section:AddSlider(opts)
     opts = opts or {}
     local title = opts.Title or "Slider"
-    local description = opts.Description or nil
+    local description = opts.Description
     local min = opts.Min or 0
     local max = opts.Max or 100
     local default = opts.Default or min
@@ -1034,7 +1047,7 @@ function Section:AddSlider(opts)
     })
     AddCorner(sliderTrack, UDim.new(0, 3))
 
-    local fillPercent = math.clamp((default - min) / (max - min), 0, 1)
+    local fillPercent = math.clamp((default - min) / math.max(max - min, 0.001), 0, 1)
 
     local sliderFill = Create("Frame", {
         Name = "Fill",
@@ -1056,7 +1069,7 @@ function Section:AddSlider(opts)
     })
     AddCorner(sliderKnob, UDim.new(0, 6))
 
-    -- Slider input area
+    -- Invisible click/drag area
     local sliderInput = Create("TextButton", {
         Name = "SliderInput",
         BackgroundTransparency = 1,
@@ -1064,10 +1077,19 @@ function Section:AddSlider(opts)
         Position = UDim2.new(0, -5, 0, -7),
         Text = "",
         ZIndex = 3,
+        AutoButtonColor = false,
         Parent = sliderTrack,
     })
 
-    local comp = { _frame = frame, _fill = sliderFill, _knob = sliderKnob, _valueLabel = valueLabel, Value = default, Type = "Slider", _changedCallbacks = {} }
+    local comp = {
+        _frame = frame,
+        _fill = sliderFill,
+        _knob = sliderKnob,
+        _valueLabel = valueLabel,
+        Value = default,
+        Type = "Slider",
+        _changedCallbacks = {},
+    }
 
     local function roundValue(val)
         if rounding == 0 then
@@ -1094,7 +1116,7 @@ function Section:AddSlider(opts)
 
     function comp:SetValue(val)
         val = math.clamp(val, min, max)
-        local percent = (val - min) / (max - min)
+        local percent = (val - min) / math.max(max - min, 0.001)
         updateSlider(percent)
     end
 
@@ -1106,8 +1128,9 @@ function Section:AddSlider(opts)
         table.insert(self._changedCallbacks, fn)
     end
 
-    -- Drag handling
+    -- Slider drag
     local sliding = false
+
     sliderInput.MouseButton1Down:Connect(function()
         sliding = true
     end)
@@ -1122,23 +1145,25 @@ function Section:AddSlider(opts)
         if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local trackPos = sliderTrack.AbsolutePosition.X
             local trackSize = sliderTrack.AbsoluteSize.X
-            local mouseX = input.Position.X
-            local percent = math.clamp((mouseX - trackPos) / trackSize, 0, 1)
-            updateSlider(percent)
+            if trackSize > 0 then
+                local mouseX = input.Position.X
+                local percent = math.clamp((mouseX - trackPos) / trackSize, 0, 1)
+                updateSlider(percent)
+            end
         end
     end))
 
-    if flag then self._library:_registerOption(flag, comp) end
+    if flag then Library:_registerOption(flag, comp) end
     return comp
 end
 
--- ─────────────────────────────────────
+-- ============================================
 -- ADD DROPDOWN
--- ─────────────────────────────────────
+-- ============================================
 function Section:AddDropdown(opts)
     opts = opts or {}
     local title = opts.Title or "Dropdown"
-    local description = opts.Description or nil
+    local description = opts.Description
     local values = opts.Values or {}
     local multi = opts.Multi or false
     local default = opts.Default
@@ -1181,7 +1206,7 @@ function Section:AddDropdown(opts)
         })
     end
 
-    -- Selected display / button
+    -- Dropdown button (shows selected value)
     local dropBtn = Create("TextButton", {
         Name = "DropBtn",
         BackgroundColor3 = Theme.InputBg,
@@ -1191,7 +1216,8 @@ function Section:AddDropdown(opts)
         FontFace = Theme.ComponentFontRegular,
         TextColor3 = Theme.TextSecondary,
         TextSize = 13,
-        Text = "Select...",
+        Text = "  Select...",
+        TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
         AutoButtonColor = false,
         ZIndex = 6,
@@ -1199,21 +1225,21 @@ function Section:AddDropdown(opts)
     })
     AddCorner(dropBtn, Theme.CornerRadiusTiny)
 
-    -- Arrow
+    -- Arrow indicator
     Create("TextLabel", {
         Name = "Arrow",
         BackgroundTransparency = 1,
         FontFace = Theme.ComponentFont,
         TextColor3 = Theme.TextTertiary,
-        TextSize = 12,
-        Text = "▼",
+        TextSize = 10,
+        Text = "v",
         Size = UDim2.new(0, 18, 1, 0),
         Position = UDim2.new(1, -18, 0, 0),
         ZIndex = 7,
         Parent = dropBtn,
     })
 
-    -- Dropdown list (expandable)
+    -- Dropdown list container
     local dropList = Create("Frame", {
         Name = "DropList",
         BackgroundColor3 = Theme.DropdownBg,
@@ -1235,63 +1261,94 @@ function Section:AddDropdown(opts)
         ScrollBarThickness = 2,
         ScrollBarImageColor3 = Theme.TextTertiary,
         CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ZIndex = 11,
         Parent = dropList,
     })
     local dropLayout = AddListLayout(dropScroll, 2)
     dropLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
+    dropLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        dropScroll.CanvasSize = UDim2.new(0, 0, 0, dropLayout.AbsoluteContentSize.Y + 4)
+    end)
+
     local isOpen = false
     local selectedValue = nil
-    local selectedMulti = {} -- for multi select
+    local selectedMulti = {}
+    local itemButtons = {}
 
     local comp = {
-        _frame = frame, _dropBtn = dropBtn, _dropList = dropList, _dropScroll = dropScroll,
-        Value = nil, Type = "Dropdown", _changedCallbacks = {}, _values = values, _multi = multi,
-        _items = {},
+        _frame = frame,
+        _dropBtn = dropBtn,
+        _dropList = dropList,
+        _dropScroll = dropScroll,
+        Value = nil,
+        Type = "Dropdown",
+        _changedCallbacks = {},
+        _values = values,
+        _multi = multi,
     }
 
     local function getDisplayText()
         if multi then
             local selected = {}
             for val, state in pairs(selectedMulti) do
-                if state then table.insert(selected, val) end
+                if state then
+                    table.insert(selected, tostring(val))
+                end
             end
-            if #selected == 0 then return "None" end
-            return table.concat(selected, ", ")
+            if #selected == 0 then return "  None" end
+            return "  " .. table.concat(selected, ", ")
         else
-            return selectedValue or "Select..."
+            if selectedValue then
+                return "  " .. tostring(selectedValue)
+            end
+            return "  Select..."
         end
     end
 
     local function updateDisplay()
-        dropBtn.Text = "  " .. getDisplayText()
+        dropBtn.Text = getDisplayText()
     end
 
     local function fireCallback()
         if multi then
             local copy = {}
-            for k, v in pairs(selectedMulti) do copy[k] = v end
+            for k, v in pairs(selectedMulti) do
+                copy[k] = v
+            end
             comp.Value = copy
             pcall(callback, copy)
-            for _, cb in ipairs(comp._changedCallbacks) do pcall(cb, copy) end
+            for _, cb in ipairs(comp._changedCallbacks) do
+                pcall(cb, copy)
+            end
         else
             comp.Value = selectedValue
             pcall(callback, selectedValue)
-            for _, cb in ipairs(comp._changedCallbacks) do pcall(cb, selectedValue) end
+            for _, cb in ipairs(comp._changedCallbacks) do
+                pcall(cb, selectedValue)
+            end
         end
     end
 
+    local function closeDropdown()
+        isOpen = false
+        Tween(dropList, { Size = UDim2.new(0.45, 0, 0, 0) }, 0.2)
+        task.delay(0.2, function()
+            if not isOpen then
+                dropList.Visible = false
+            end
+        end)
+    end
+
     local function buildItems()
-        for _, item in ipairs(comp._items) do
+        for _, item in ipairs(itemButtons) do
             item:Destroy()
         end
-        comp._items = {}
+        itemButtons = {}
 
         for i, val in ipairs(comp._values) do
             local itemBtn = Create("TextButton", {
-                Name = "Item_" .. val,
+                Name = "Item_" .. tostring(val),
                 BackgroundColor3 = Theme.DropdownItem,
                 BackgroundTransparency = 0.3,
                 BorderSizePixel = 0,
@@ -1299,7 +1356,7 @@ function Section:AddDropdown(opts)
                 FontFace = Theme.ComponentFontRegular,
                 TextColor3 = Theme.TextSecondary,
                 TextSize = 13,
-                Text = "  " .. val,
+                Text = "  " .. tostring(val),
                 TextXAlignment = Enum.TextXAlignment.Left,
                 TextTruncate = Enum.TextTruncate.AtEnd,
                 AutoButtonColor = false,
@@ -1319,33 +1376,24 @@ function Section:AddDropdown(opts)
             itemBtn.MouseButton1Click:Connect(function()
                 if multi then
                     selectedMulti[val] = not selectedMulti[val]
-                    if selectedMulti[val] then
-                        itemBtn.TextColor3 = Theme.TextPrimary
-                    else
-                        itemBtn.TextColor3 = Theme.TextSecondary
-                    end
+                    itemBtn.TextColor3 = selectedMulti[val] and Theme.TextPrimary or Theme.TextSecondary
+                    updateDisplay()
+                    fireCallback()
                 else
                     selectedValue = val
                     updateDisplay()
                     fireCallback()
-                    -- Close dropdown
-                    isOpen = false
-                    Tween(dropList, { Size = UDim2.new(0.45, 0, 0, 0) }, 0.2)
-                    task.delay(0.2, function()
-                        if not isOpen then dropList.Visible = false end
-                    end)
+                    closeDropdown()
                 end
-                updateDisplay()
-                if multi then fireCallback() end
             end)
 
-            table.insert(comp._items, itemBtn)
+            table.insert(itemButtons, itemBtn)
         end
     end
 
     buildItems()
 
-    -- Toggle dropdown
+    -- Toggle dropdown open/close
     dropBtn.MouseButton1Click:Connect(function()
         isOpen = not isOpen
         if isOpen then
@@ -1354,14 +1402,11 @@ function Section:AddDropdown(opts)
             local targetHeight = itemCount * 24 + 6
             Tween(dropList, { Size = UDim2.new(0.45, 0, 0, targetHeight) }, 0.25)
         else
-            Tween(dropList, { Size = UDim2.new(0.45, 0, 0, 0) }, 0.2)
-            task.delay(0.2, function()
-                if not isOpen then dropList.Visible = false end
-            end)
+            closeDropdown()
         end
     end)
 
-    -- Set default
+    -- Set default value
     if default then
         if multi then
             if type(default) == "table" then
@@ -1369,15 +1414,16 @@ function Section:AddDropdown(opts)
                     selectedMulti[v] = true
                 end
             end
+            comp.Value = selectedMulti
         else
             if type(default) == "number" and values[default] then
                 selectedValue = values[default]
             else
                 selectedValue = default
             end
+            comp.Value = selectedValue
         end
         updateDisplay()
-        comp.Value = multi and selectedMulti or selectedValue
     end
 
     function comp:SetValue(val)
@@ -1415,13 +1461,13 @@ function Section:AddDropdown(opts)
         table.insert(self._changedCallbacks, fn)
     end
 
-    if flag then self._library:_registerOption(flag, comp) end
+    if flag then Library:_registerOption(flag, comp) end
     return comp
 end
 
--- ─────────────────────────────────────
+-- ============================================
 -- ADD TEXTBOX
--- ─────────────────────────────────────
+-- ============================================
 function Section:AddTextbox(opts)
     opts = opts or {}
     local title = opts.Title or "Input"
@@ -1466,28 +1512,40 @@ function Section:AddTextbox(opts)
     AddCorner(textBox, Theme.CornerRadiusTiny)
     AddPadding(textBox, 0, 6, 0, 6)
 
-    local comp = { _frame = frame, _textBox = textBox, Value = default, Type = "Input", _changedCallbacks = {} }
+    local comp = {
+        _frame = frame,
+        _textBox = textBox,
+        Value = default,
+        Type = "Input",
+        _changedCallbacks = {},
+    }
 
     local function onTextChanged()
         local text = textBox.Text
         if numeric then
             text = text:gsub("[^%d%.%-]", "")
-            if text ~= textBox.Text then textBox.Text = text end
+            if text ~= textBox.Text then
+                textBox.Text = text
+            end
         end
         comp.Value = text
     end
 
     if finished then
-        textBox.FocusLost:Connect(function(enterPressed)
+        textBox.FocusLost:Connect(function()
             onTextChanged()
             pcall(callback, comp.Value)
-            for _, cb in ipairs(comp._changedCallbacks) do pcall(cb, comp.Value) end
+            for _, cb in ipairs(comp._changedCallbacks) do
+                pcall(cb, comp.Value)
+            end
         end)
     else
         textBox:GetPropertyChangedSignal("Text"):Connect(function()
             onTextChanged()
             pcall(callback, comp.Value)
-            for _, cb in ipairs(comp._changedCallbacks) do pcall(cb, comp.Value) end
+            for _, cb in ipairs(comp._changedCallbacks) do
+                pcall(cb, comp.Value)
+            end
         end)
     end
 
@@ -1504,30 +1562,33 @@ function Section:AddTextbox(opts)
         table.insert(self._changedCallbacks, fn)
     end
 
-    if flag then self._library:_registerOption(flag, comp) end
+    if flag then Library:_registerOption(flag, comp) end
     return comp
 end
 
--- ─────────────────────────────────────
+-- ============================================
 -- ADD KEYBIND
--- ─────────────────────────────────────
+-- ============================================
 function Section:AddKeybind(opts)
     opts = opts or {}
     local title = opts.Title or "Keybind"
     local default = opts.Default or Enum.KeyCode.RightShift
-    local mode = opts.Mode or "Toggle" -- Always, Toggle, Hold
+    local mode = opts.Mode or "Toggle"
     local callback = opts.Callback or function() end
-    local changedCallback = opts.ChangedCallback or nil
+    local changedCallback = opts.ChangedCallback
     local flag = opts.Flag
 
-    -- Resolve default if string
+    -- Resolve string key name to Enum
     if type(default) == "string" then
         if default == "MB1" then
             default = Enum.UserInputType.MouseButton1
         elseif default == "MB2" then
             default = Enum.UserInputType.MouseButton2
         else
-            pcall(function() default = Enum.KeyCode[default] end)
+            local ok, resolved = pcall(function()
+                return Enum.KeyCode[default]
+            end)
+            if ok then default = resolved end
         end
     end
 
@@ -1547,6 +1608,13 @@ function Section:AddKeybind(opts)
         Parent = frame,
     })
 
+    local function getKeyName(key)
+        local name = tostring(key)
+        name = name:gsub("Enum.KeyCode.", "")
+        name = name:gsub("Enum.UserInputType.", "")
+        return name
+    end
+
     local keyBtn = Create("TextButton", {
         Name = "KeyBtn",
         BackgroundColor3 = Theme.InputBg,
@@ -1556,34 +1624,34 @@ function Section:AddKeybind(opts)
         FontFace = Theme.ComponentFontRegular,
         TextColor3 = Theme.TextSecondary,
         TextSize = 12,
-        Text = tostring(default):gsub("Enum.KeyCode.", ""):gsub("Enum.UserInputType.", ""),
+        Text = getKeyName(default),
         AutoButtonColor = false,
         Parent = frame,
     })
     AddCorner(keyBtn, Theme.CornerRadiusTiny)
 
     local comp = {
-        _frame = frame, _keyBtn = keyBtn,
-        Value = default, Type = "Keybind",
-        _mode = mode, _state = false, _binding = false,
-        _changedCallbacks = {}, _clickCallbacks = {},
+        _frame = frame,
+        _keyBtn = keyBtn,
+        Value = default,
+        Type = "Keybind",
+        _mode = mode,
+        _state = false,
+        _binding = false,
+        _changedCallbacks = {},
+        _clickCallbacks = {},
     }
 
-    local function getKeyName(key)
-        local name = tostring(key)
-        name = name:gsub("Enum.KeyCode.", ""):gsub("Enum.UserInputType.", "")
-        return name
-    end
-
-    -- Click to rebind
+    -- Click to start rebinding
     keyBtn.MouseButton1Click:Connect(function()
         comp._binding = true
         keyBtn.Text = "..."
     end)
 
     Library:_addConnection(UserInputService.InputBegan:Connect(function(input, processed)
+        -- Rebind mode
         if comp._binding then
-            local key
+            local key = nil
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 key = input.KeyCode
             elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -1604,6 +1672,7 @@ function Section:AddKeybind(opts)
 
         if processed then return end
 
+        -- Check if pressed key matches bound key
         local isMatch = false
         if typeof(comp.Value) == "EnumItem" then
             if comp.Value.EnumType == Enum.KeyCode and input.KeyCode == comp.Value then
@@ -1653,7 +1722,10 @@ function Section:AddKeybind(opts)
             elseif key == "MB2" then
                 key = Enum.UserInputType.MouseButton2
             else
-                pcall(function() key = Enum.KeyCode[key] end)
+                local ok, resolved = pcall(function()
+                    return Enum.KeyCode[key]
+                end)
+                if ok then key = resolved end
             end
         end
         self.Value = key
@@ -1681,7 +1753,7 @@ function Section:AddKeybind(opts)
         Tween(keyBtn, { BackgroundColor3 = Theme.InputBg }, 0.15)
     end)
 
-    if flag then self._library:_registerOption(flag, comp) end
+    if flag then Library:_registerOption(flag, comp) end
     return comp
 end
 
@@ -1692,7 +1764,7 @@ function Library:Notify(opts)
     opts = opts or {}
     local title = opts.Title or "Notification"
     local content = opts.Content or ""
-    local subContent = opts.SubContent or nil
+    local subContent = opts.SubContent
     local duration = opts.Duration or 5
 
     if not self._notifyHolder then return end
@@ -1710,7 +1782,7 @@ function Library:Notify(opts)
     AddCorner(notifyFrame, Theme.CornerRadiusSmall)
     AddStroke(notifyFrame, Theme.NotifyBorder, 1, 0.3)
 
-    -- Accent bar on left
+    -- Left accent bar
     Create("Frame", {
         Name = "AccentBar",
         BackgroundColor3 = Theme.SliderFill,
@@ -1785,15 +1857,16 @@ function Library:Notify(opts)
     -- Animate in
     Tween(notifyFrame, { BackgroundTransparency = 0 }, 0.3)
 
-    -- Animate progress bar
+    -- Progress countdown + fade out
     if duration then
         Tween(progressFill, { Size = UDim2.new(0, 0, 1, 0) }, duration, Enum.EasingStyle.Linear)
 
-        -- Animate out after duration
         task.delay(duration, function()
             Tween(notifyFrame, { BackgroundTransparency = 1 }, 0.4)
             task.delay(0.5, function()
-                notifyFrame:Destroy()
+                pcall(function()
+                    notifyFrame:Destroy()
+                end)
             end)
         end)
     end
@@ -1818,27 +1891,29 @@ function Library:Destroy()
 end
 
 -- ============================================
--- TAB DIRECT COMPONENT ACCESS (convenience)
--- For cases like Tab:AddToggle without Section
+-- TAB CONVENIENCE METHODS (add directly to Tab)
 -- ============================================
+function Tab:_getDefaultSection()
+    if not self._defaultSection then
+        self._defaultSection = self:AddSection({ Title = "" })
+    end
+    return self._defaultSection
+end
+
 function Tab:AddLabel(opts)
-    local section = self:_getDefaultSection()
-    return section:AddLabel(opts)
+    return self:_getDefaultSection():AddLabel(opts)
 end
 
 function Tab:AddParagraph(opts)
-    local section = self:_getDefaultSection()
-    return section:AddParagraph(opts)
+    return self:_getDefaultSection():AddParagraph(opts)
 end
 
 function Tab:AddButton(opts)
-    local section = self:_getDefaultSection()
-    return section:AddButton(opts)
+    return self:_getDefaultSection():AddButton(opts)
 end
 
 function Tab:AddToggle(flagOrOpts, opts2)
     local section = self:_getDefaultSection()
-    -- Support Fluent-style: Tab:AddToggle("Flag", {opts})
     if type(flagOrOpts) == "string" and type(opts2) == "table" then
         opts2.Flag = flagOrOpts
         return section:AddToggle(opts2)
@@ -1880,16 +1955,6 @@ function Tab:AddKeybind(flagOrOpts, opts2)
         return section:AddKeybind(opts2)
     end
     return section:AddKeybind(flagOrOpts)
-end
-
-function Tab:_getDefaultSection()
-    if not self._defaultSection then
-        self._defaultSection = self:AddSection({ Title = "" })
-        -- Hide the title for default section
-        local titleFrame = self._defaultSection._frame:FindFirstChild("SectionTitle")
-        if titleFrame then titleFrame.Visible = false; titleFrame.Size = UDim2.new(0, 0, 0, 0) end
-    end
-    return self._defaultSection
 end
 
 return Library
