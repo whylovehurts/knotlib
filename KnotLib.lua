@@ -26,31 +26,31 @@ local LocalPlayer = Players.LocalPlayer
 -- THEME & DESIGN TOKENS
 -- ============================================
 local Theme = {
-    Background       = Color3.fromRGB(16, 16, 20),
-    ToggleBarBg      = Color3.fromRGB(22, 22, 28),
-    MainFrameBg      = Color3.fromRGB(20, 20, 26),
-    TabsBg           = Color3.fromRGB(22, 22, 28),
-    CurrentTabBg     = Color3.fromRGB(18, 18, 24),
-    ComponentBg      = Color3.fromRGB(28, 28, 36),
-    Hover            = Color3.fromRGB(36, 36, 46),
+    Background       = Color3.fromRGB(8, 8, 12),       -- Ultra-deep carbon
+    ToggleBarBg      = Color3.fromRGB(12, 12, 16),
+    MainFrameBg      = Color3.fromRGB(10, 10, 14),
+    TabsBg           = Color3.fromRGB(12, 12, 16),
+    CurrentTabBg     = Color3.fromRGB(10, 10, 14),
+    ComponentBg      = Color3.fromRGB(18, 18, 24),
+    Hover            = Color3.fromRGB(26, 26, 34),
 
     Accent           = Color3.fromRGB(99, 102, 241),
     AccentHover      = Color3.fromRGB(129, 140, 248),
 
-    TextPrimary      = Color3.fromRGB(245, 245, 250),
-    TextSecondary    = Color3.fromRGB(160, 160, 175),
-    TextTertiary     = Color3.fromRGB(110, 110, 125),
+    TextPrimary      = Color3.fromRGB(240, 240, 248),
+    TextSecondary    = Color3.fromRGB(145, 145, 165),
+    TextTertiary     = Color3.fromRGB(90, 90, 110),
 
     ToggleOn         = Color3.fromRGB(99, 102, 241),
-    ToggleOff        = Color3.fromRGB(45, 45, 58),
+    ToggleOff        = Color3.fromRGB(34, 34, 44),
     SliderFill       = Color3.fromRGB(99, 102, 241),
-    SliderBg         = Color3.fromRGB(38, 38, 48),
-    DropdownBg       = Color3.fromRGB(24, 24, 32),
-    DropdownItem     = Color3.fromRGB(32, 32, 42),
-    NotifyBg         = Color3.fromRGB(24, 24, 32),
-    InputBg          = Color3.fromRGB(14, 14, 18),
+    SliderBg         = Color3.fromRGB(24, 24, 32),
+    DropdownBg       = Color3.fromRGB(12, 12, 18),
+    DropdownItem     = Color3.fromRGB(20, 20, 28),
+    NotifyBg         = Color3.fromRGB(12, 12, 18),
+    InputBg          = Color3.fromRGB(6, 6, 10),
     RimLight         = Color3.fromRGB(255, 255, 255),
-    PlayerListBg     = Color3.fromRGB(22, 22, 28),
+    PlayerListBg     = Color3.fromRGB(14, 14, 20),
 
     TitleFont            = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
     ModalFont            = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
@@ -226,12 +226,16 @@ function Library:CreateWindow(opts)
     local main = Create("Frame", {
         Name = "Main", BackgroundColor3 = Theme.Background, BorderSizePixel = 0,
         Size = size, Position = UDim2.new(0.5, -(size.X.Offset / 2), 0.5, -(size.Y.Offset / 2)),
+        ClipsDescendants = true,
         Parent = screenGui,
     })
     AddCorner(main, Theme.CornerRadius)
     AddRimLight(main, Theme.RimLight, 0.88, 1)
     AddSafeShadow(main)
     win._main = main
+    win._currentSize = { X = size.X.Offset, Y = size.Y.Offset }
+    win._minSize = { X = 500, Y = 300 }
+    win._maxSize = { X = 1100, Y = 700 }
 
     -- Top Header Bar
     local toggleBar = Create("Frame", {
@@ -408,6 +412,38 @@ function Library:CreateWindow(opts)
     yesBtn.MouseButton1Click:Connect(function() showModal(false); task.defer(function() self:Destroy() end) end)
     noBtn.MouseButton1Click:Connect(function() showModal(false) end)
 
+    -- ===== RESIZE HANDLE (Bottom-Right Corner) =====
+    local resizeHandle = Create("TextButton", {
+        Name = "ResizeHandle", BackgroundTransparency = 1,
+        Size = UDim2.fromOffset(18, 18), Position = UDim2.new(1, -18, 1, -18),
+        Text = "", AutoButtonColor = false, ZIndex = 10, Parent = main,
+    })
+    -- Diagonal lines icon for resize grip
+    local grip1 = Create("Frame", { BackgroundColor3 = Theme.TextTertiary, BackgroundTransparency = 0.4, Size = UDim2.fromOffset(10, 1), Position = UDim2.new(0, 6, 0, 12), Rotation = -45, Parent = resizeHandle })
+    local grip2 = Create("Frame", { BackgroundColor3 = Theme.TextTertiary, BackgroundTransparency = 0.4, Size = UDim2.fromOffset(6, 1), Position = UDim2.new(0, 10, 0, 14), Rotation = -45, Parent = resizeHandle })
+
+    local resizing = false
+    local resizeStart, sizeStart = nil, nil
+    resizeHandle.MouseButton1Down:Connect(function()
+        resizing = true
+        resizeStart = UserInputService:GetMouseLocation()
+        sizeStart = { X = main.AbsoluteSize.X, Y = main.AbsoluteSize.Y }
+    end)
+    self:_addConnection(UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then resizing = false end
+    end))
+    self:_addConnection(UserInputService.InputChanged:Connect(function(inp)
+        if resizing and inp.UserInputType == Enum.UserInputType.MouseMovement then
+            local mouse = UserInputService:GetMouseLocation()
+            local dx = mouse.X - resizeStart.X
+            local dy = mouse.Y - resizeStart.Y
+            local newW = math.clamp(sizeStart.X + dx, win._minSize.X, win._maxSize.X)
+            local newH = math.clamp(sizeStart.Y + dy, win._minSize.Y, win._maxSize.Y)
+            main.Size = UDim2.fromOffset(newW, newH)
+            win._currentSize = { X = newW, Y = newH }
+        end
+    end))
+
     -- Minimize Keybind
     self:_addConnection(UserInputService.InputBegan:Connect(function(input, processed)
         if processed then return end
@@ -437,9 +473,11 @@ function Window:ToggleVisibility()
     self._visible = not self._visible
     if self._visible then
         self._main.Visible = true
-        Tween(self._main, { Size = UDim2.fromOffset(760, 420), BackgroundTransparency = 0 }, 0.22)
+        local sz = self._currentSize or { X = 760, Y = 420 }
+        Tween(self._main, { Size = UDim2.fromOffset(sz.X, sz.Y), BackgroundTransparency = 0 }, 0.22)
     else
-        Tween(self._main, { Size = UDim2.fromOffset(760, 0), BackgroundTransparency = 1 }, 0.22)
+        local sz = self._currentSize or { X = 760, Y = 420 }
+        Tween(self._main, { Size = UDim2.fromOffset(sz.X, 0), BackgroundTransparency = 1 }, 0.22)
         task.delay(0.22, function() if not self._visible then self._main.Visible = false end end)
     end
 end
@@ -1091,18 +1129,19 @@ function Section:AddPlayerList(opts)
     opts = opts or {}
     local frame = CreateCompFrame(self._frame, 0, self._library:_getOrder())
     frame.AutomaticSize = Enum.AutomaticSize.Y; frame.ClipsDescendants = true
-    AddPadding(frame, 6, 6, 6, 6)
+    AddPadding(frame, 8, 8, 8, 8)
+    AddListLayout(frame, 6, Enum.FillDirection.Vertical, Enum.HorizontalAlignment.Center)
 
     if opts.Title then
         Create("TextLabel", {
             BackgroundTransparency = 1, FontFace = Theme.ComponentFont, TextColor3 = Theme.TextPrimary,
             TextSize = 14, Text = opts.Title, TextXAlignment = Enum.TextXAlignment.Left,
-            Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 0, Parent = frame,
+            Size = UDim2.new(1, -4, 0, 20), LayoutOrder = 0, Parent = frame,
         })
     end
 
     local listScroll = Create("ScrollingFrame", {
-        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, math.min((opts.MaxVisible or 5) * 36, 180)),
+        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, math.min((opts.MaxVisible or 5) * 35, 180)),
         ScrollBarThickness = 2, ScrollBarImageColor3 = Theme.TextTertiary, CanvasSize = UDim2.new(0, 0, 0, 0),
         LayoutOrder = 1, Parent = frame,
     })
