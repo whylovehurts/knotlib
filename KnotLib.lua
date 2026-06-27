@@ -191,7 +191,6 @@ end
 
 function Library:AddContact(platform, link)
     table.insert(self._contacts, { Platform = platform or "Social", Link = link or "" })
-    for _, win in ipairs(self._windows) do if win._refreshCredits then win:_refreshCredits() end end
 end
 
 -- Forward declarations
@@ -206,6 +205,7 @@ function Library:CreateWindow(opts)
     opts = opts or {}
     local size = opts.Size or UDim2.fromOffset(760, 420)
     local minimizeKey = opts.MinimizeKey or Enum.KeyCode.RightShift
+    local hubNameStr = opts.HubName or opts.Title or "KnotHub"
 
     local win = setmetatable({}, Window)
     win._library = self
@@ -250,20 +250,48 @@ function Library:CreateWindow(opts)
     local statusDot = Create("Frame", { BackgroundColor3 = Theme.Accent, Size = UDim2.fromOffset(8, 8), Position = UDim2.new(0, 20, 0.5, -4), Parent = toggleBar })
     AddCorner(statusDot, Theme.CornerRadiusPill)
     win._statusDot = statusDot
-    self:_onThemeChange(function()
-        statusDot.BackgroundColor3 = Theme.Accent
-    end)
+    -- Auto Detect Game Name & Hub Name Badge
+    local titleContainer = Create("Frame", {
+        Name = "TitleContainer", BackgroundTransparency = 1,
+        Size = UDim2.new(0, 520, 0, 36), Position = UDim2.new(0, 38, 0, 8), Parent = toggleBar,
+    })
+    local titleLayout = AddListLayout(titleContainer, 8, Enum.FillDirection.Horizontal, Enum.HorizontalAlignment.Left)
+    titleLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- Auto Detect Game Name
+    local hubBadge = Create("Frame", {
+        Name = "HubBadge", BackgroundColor3 = Theme.Accent, BackgroundTransparency = 0.85,
+        Size = UDim2.new(0, 0, 0, 26), AutomaticSize = Enum.AutomaticSize.X, Parent = titleContainer,
+    })
+    AddCorner(hubBadge, Theme.CornerRadiusSmall)
+    local hubRim = AddRimLight(hubBadge, Theme.Accent, 0.4, 1)
+
+    local hubNameLabel = Create("TextLabel", {
+        Name = "HubName", BackgroundTransparency = 1, FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Heavy, Enum.FontStyle.Normal),
+        TextColor3 = Theme.Accent, TextSize = 13, Text = hubNameStr,
+        AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 1, 0), Parent = hubBadge,
+    })
+    AddPadding(hubBadge, 0, 10, 0, 10)
+
+    Create("TextLabel", {
+        BackgroundTransparency = 1, FontFace = Theme.ComponentFontRegular, TextColor3 = Theme.TextTertiary,
+        TextSize = 14, Text = "|", AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 1, 0), Parent = titleContainer,
+    })
+
     local gameNameLabel = Create("TextLabel", {
         Name = "GameName", BackgroundTransparency = 1, FontFace = Theme.TitleFont,
-        TextColor3 = Theme.TextPrimary, TextScaled = true, Text = "Detecting Game...",
-        TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(0, 520, 0, 36),
-        Position = UDim2.new(0, 38, 0, 8), Parent = toggleBar,
+        TextColor3 = Theme.TextPrimary, TextSize = 15, Text = "Detecting Game...",
+        TextXAlignment = Enum.TextXAlignment.Left, AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.new(0, 0, 1, 0), Parent = titleContainer,
     })
-    Create("UITextSizeConstraint", { MaxTextSize = 22, MinTextSize = 14, Parent = gameNameLabel })
     win._gameNameLabel = gameNameLabel
     task.spawn(function() gameNameLabel.Text = AutoDetectGameName() end)
+
+    self:_onThemeChange(function()
+        statusDot.BackgroundColor3 = Theme.Accent
+        hubBadge.BackgroundColor3 = Theme.Accent
+        hubNameLabel.TextColor3 = Theme.Accent
+        if hubRim and hubRim.Parent then hubRim.ImageColor3 = Theme.Accent end
+    end)
 
     MakeDraggable(toggleBar, main)
 
@@ -288,7 +316,7 @@ function Library:CreateWindow(opts)
     -- User Tabs Scrolling List
     local userTabsScroll = Create("ScrollingFrame", {
         Name = "UserTabsList", BackgroundTransparency = 1, BorderSizePixel = 0,
-        Size = UDim2.new(1, -12, 1, -80), Position = UDim2.new(0, 6, 0, 6),
+        Size = UDim2.new(1, -12, 1, -12), Position = UDim2.new(0, 6, 0, 6),
         ScrollBarThickness = 2, ScrollBarImageColor3 = Theme.TextTertiary,
         CanvasSize = UDim2.new(0, 0, 0, 0), Parent = tabsSidebar,
     })
@@ -297,16 +325,6 @@ function Library:CreateWindow(opts)
         userTabsScroll.CanvasSize = UDim2.new(0, 0, 0, userTabsLayout.AbsoluteContentSize.Y + 8)
     end)
     win._userTabsScroll = userTabsScroll
-
-    -- Divider
-    Create("Frame", { BackgroundColor3 = Theme.TextTertiary, BackgroundTransparency = 0.8, BorderSizePixel = 0, Size = UDim2.new(1, -24, 0, 1), Position = UDim2.new(0, 12, 1, -70), Parent = tabsSidebar })
-
-    -- Fixed System Tabs
-    local fixedTabsContainer = Create("Frame", {
-        Name = "FixedTabs", BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 60),
-        Position = UDim2.new(0, 6, 1, -64), Parent = tabsSidebar,
-    })
-    AddListLayout(fixedTabsContainer, 4)
 
     -- Current Tab Viewport
     local currentTabFrame = Create("Frame", {
@@ -462,7 +480,6 @@ function Library:CreateWindow(opts)
     end
 
     table.insert(self._windows, win)
-    win:_initBuiltInTabs(fixedTabsContainer)
     return win
 end
 
@@ -542,66 +559,6 @@ function Window:AddTab(opts)
     return tab
 end
 
-function Window:_initBuiltInTabs(container)
-    -- Config Tab
-    local configTab = self:_createTabElement("Config", container, 1)
-    local cfgSec = configTab:AddSection("Color Palettes & Aesthetics")
-    cfgSec:AddLabel("Choose UI Accent Theme")
-    cfgSec:AddButton({ Title = "Electric Indigo (Default)", Callback = function()
-        self._library:SetAccent(Color3.fromRGB(99, 102, 241))
-    end })
-    cfgSec:AddButton({ Title = "Cyber Neon (Cyan)", Callback = function()
-        self._library:SetAccent(Color3.fromRGB(6, 182, 212))
-    end })
-    cfgSec:AddButton({ Title = "Crimson Dark (Rose)", Callback = function()
-        self._library:SetAccent(Color3.fromRGB(244, 63, 94))
-    end })
-    cfgSec:AddButton({ Title = "Emerald Green", Callback = function()
-        self._library:SetAccent(Color3.fromRGB(16, 185, 129))
-    end })
-    cfgSec:AddButton({ Title = "Amber Gold", Callback = function()
-        self._library:SetAccent(Color3.fromRGB(245, 158, 11))
-    end })
-
-    -- Credits Tab
-    local creditsTab = self:_createTabElement("Credits", container, 2)
-    self._creditsSection = creditsTab:AddSection("Support & Community")
-    self._refreshCredits = function()
-        for _, ch in ipairs(self._creditsSection._frame:GetChildren()) do
-            if ch:IsA("Frame") and ch.Name:sub(1, 8) == "Contact_" then ch:Destroy() end
-        end
-        for _, contact in ipairs(self._library._contacts) do
-            local frame = Create("Frame", {
-                Name = "Contact_" .. contact.Platform, BackgroundColor3 = Theme.ComponentBg,
-                Size = UDim2.new(1, -4, 0, 42), LayoutOrder = self._library:_getOrder(),
-                Parent = self._creditsSection._frame
-            })
-            AddCorner(frame, Theme.CornerRadiusSmall); AddRimLight(frame, Theme.RimLight, 0.92, 1)
-            Create("TextLabel", {
-                BackgroundTransparency = 1, FontFace = Theme.ComponentFont, TextColor3 = Theme.TextPrimary,
-                TextSize = 14, Text = "  " .. contact.Platform, TextXAlignment = Enum.TextXAlignment.Left,
-                Size = UDim2.new(0.6, 0, 1, 0), Position = UDim2.new(0, 8, 0, 0), Parent = frame
-            })
-            local copyBtn = Create("TextButton", {
-                BackgroundColor3 = Theme.Accent, FontFace = Theme.ComponentFont,
-                TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 12, Text = "Copy Link",
-                Size = UDim2.fromOffset(80, 28), Position = UDim2.new(1, -90, 0.5, -14),
-                AutoButtonColor = false, Parent = frame
-            })
-            AddCorner(copyBtn, Theme.CornerRadiusSmall)
-            -- Reactive: accent on copy buttons
-            self._library:_onThemeChange(function()
-                if copyBtn and copyBtn.Parent then copyBtn.BackgroundColor3 = Theme.Accent end
-            end)
-            copyBtn.MouseButton1Click:Connect(function()
-                local setclip = setclipboard or toclipboard or function() end
-                pcall(setclip, contact.Link)
-                copyBtn.Text = "Copied!"; task.delay(1.5, function() if copyBtn and copyBtn.Parent then copyBtn.Text = "Copy Link" end end)
-            end)
-        end
-    end
-    self:_refreshCredits()
-end
 
 -- ============================================
 -- TAB METHODS
